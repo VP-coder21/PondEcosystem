@@ -1,0 +1,165 @@
+import java.awt.Rectangle;
+
+import javax.swing.ImageIcon;
+
+public class Bird extends Animal{
+	
+	public static final int OLDAGE = 9;
+	public static final double AVE_NUM_BABIES = 2.3;
+	public boolean egg;
+	
+	public Bird(int x, int y) {
+		super(x, y);
+		type = "Bird";	
+		
+        egg = true;
+        gender = 0;
+        int size = 6*ANIMAL_RAD/5;	
+        pic = new ImageIcon("egg.png");
+		space = new Rectangle(x - size, y - size, size*2, size*2);
+		perception = 2*ANIMAL_RAD;
+	}
+	
+	public void move() {
+		if(!alive) return;
+		if(egg) return;
+    	int delx, dely;
+    	Rectangle attemptedmove;
+    	
+    	Rectangle target = lookAround();
+    	if(target != null) {
+    		delx = target.x - space.x;
+    		dely = target.y - space.y;
+    	}
+    	else {
+    		double ang = Math.random()*Math.PI*2;
+    		delx = (int)(space.width*Math.cos(ang));
+    		dely = (int)(space.height*Math.sin(ang));
+    	}
+    		
+    	attemptedmove = new Rectangle(space.x + delx, space.y + dely, space.width, space.height);
+    	
+    	if(outsidePond(attemptedmove)) return;
+    	space.x += delx;
+    	space.y += dely;
+    	health--; //it costs energy to move.
+	}
+    public void act() {
+    	if(egg && Visual.TIMER < 200) return;
+    	else if(egg) {
+    		egg = false;
+    		if(Math.random() < .5)
+            {
+            	gender = 1;
+            	pic = new ImageIcon("bird.gif");
+            	int x = space.x - 12;
+            	int y = space.y - 12;
+            	int size = space.width + 24;
+                space = new Rectangle(x, y, size, size);
+            }
+            else
+            {
+            	gender = 2;
+            	pic = new ImageIcon("birdgirl.gif");
+            	int x = space.x - 12;
+            	int y = space.y - 12;
+            	int size = space.width + 24;
+                space = new Rectangle(x, y, size, size);
+            }
+    		Visual.TIMER = 0;
+    	}
+    	else {
+    		Rectangle reach = new Rectangle(space.x - space.width, space.y - space.height, space.width * 3, space.height * 3);
+
+    		for(int n = Control.critters.size()-1; n >= 0; n--)
+    			if(Control.critters.get(n).type == "Notorious Frog Gobbler" && reach.intersects(Control.critters.get(n).space))
+    			{
+    				//Find food, eat food...
+    				hungry = false;
+    				health += Control.bits.get(0).nutrients * 5;
+    				Control.critters.get(n).alive = false;
+    				Control.died++;
+    				//BE CAREFUL -- you can remove food from Control.bits...  but if you eat/kill a critter **DO NOT REMOVE THEM** 
+    				//Instead just set their alive boolean to false:  Control.critters.get(n).alive = false; 
+    				//They will be removed later.  This is because the food does not ACT(), pulling one from its list doesn't hurt
+    				//anything, but if you do that to a critter it can REALLY mess up the arraylist during the act() sequence
+    			}
+    		for(int n = Control.bits.size()-1; n >= 0; n--)
+    			if(Control.bits.get(n).food && reach.intersects(Control.bits.get(n).space)) {
+    				hungry = false;
+    				health += Control.bits.get(n).nutrients;
+    				Control.bits.remove(n);
+    			}
+    		
+    		if(pregnant) return;
+            boolean found = false;
+            for(int n = 0; !found && n < Control.critters.size(); n++)
+            {
+                if(Control.critters.get(n).gender == 1 && this.gender == 2 && checkIf(Control.critters.get(n), "Bird", reach))
+                    found = true;
+            }
+            if(found) pregnant = true;
+    	}
+        
+    }
+    public void age() {
+    	if(egg) return;
+    	if(hungry) health -= DAILY_HUNGER;
+        
+        hungry = true;  //it will start each day hungry
+
+        age++;
+        
+        if(age > OLDAGE)
+        {
+            if(Math.random()*100 > health) {
+                alive = false;
+                Control.died++;
+            }
+        }
+        
+        if(!pregnant) return;
+
+        //If you're here, you are a pregnant frog about to have babies.
+        pregnant = false;
+        boolean morebabies = true;
+        int attempts = 0;
+        while(morebabies)
+        {
+        	attempts++;
+        	//pick a random direction... and place a baby if its open
+        	double ang = Math.random()*Math.PI*2;
+        	int delx = (int)(space.width*Math.cos(ang));
+        	int dely = (int)(space.height*Math.sin(ang));
+        	Animal baby = new Bird(space.x+delx, space.y+dely);
+
+        	//Checking for the border and rocks and other critters...
+        	if(!outsidePond(baby.space) && Control.pondIsEmptyWater(baby.space))
+        	{
+        		Control.critters.add(baby);
+        		Control.born++;
+        		if(Math.random() > 1/AVE_NUM_BABIES) morebabies = false;
+        	}
+        	if(attempts > 15) morebabies = false;
+        }
+    }
+    public Rectangle lookAround()
+    {
+    	//Make a perception rectangle around your space...
+    	Rectangle view = new Rectangle(space.x - perception, space.y - perception, space.width + 2*perception, space.height + 2*perception);
+    	for(int n = 0; n < Control.critters.size(); n++)
+    	{
+    		if(checkIf(Control.critters.get(n), "Notorious Frog Gobbler", view))
+    			return Control.critters.get(n).space;
+    	}
+    	return null;
+    }
+    public boolean checkIf(Animal a, String t, Rectangle r) {
+    	if(this != a  //check to make sure the target animal isn't me  
+    	    && a.alive  //check to make sure the target animal is alive
+    	    && a.type.equals(t)  //check to make sure the animal's type matches the parameter
+    	    && a.space.intersects(r)) //check to make sure the animal's space is inside the parameter rectangle.
+    	    	return true;
+    	else
+    	    return false;}
+}
